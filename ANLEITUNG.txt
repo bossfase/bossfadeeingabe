@@ -1,0 +1,23 @@
+SALONKASSE – Installation
+=========================
+
+1) Online stellen (kostenlos, ca. 2 Minuten)
+   - https://app.netlify.com/drop öffnen
+   - Den ganzen Ordner "salonkasse" (entpackt!) ins Fenster ziehen
+   - Du bekommst einen Link wie https://xyz.netlify.app – den an die Mitarbeiter schicken
+   (Alternativ: GitHub Pages oder jeder andere Webspace mit HTTPS.)
+
+2) Auf dem Handy als App installieren
+   - iPhone: Link in SAFARI öffnen -> Teilen-Symbol -> "Zum Home-Bildschirm"
+   - Android: Link in Chrome öffnen -> Menü (⋮) -> "App installieren" / "Zum Startbildschirm"
+   Danach startet die App wie eine normale App, auch ohne Internet.
+
+WICHTIG
+   - Die Einträge werden NUR auf dem jeweiligen Handy gespeichert (kein Server,
+     jede Mitarbeiterin hat ihre eigene Liste). Abends per "Tag als CSV exportieren"
+     z. B. per WhatsApp/Mail an die Chefin schicken.
+   - Nicht im privaten/Inkognito-Modus benutzen – dann wird nichts gespeichert
+     (die App zeigt in dem Fall eine gelbe Warnung).
+   - Browserdaten löschen / App deinstallieren löscht auch die Einträge.
+   - Bei Änderungen an den Dateien in sw.js die VERSION erhöhen (z. B. v2),
+     damit alle Handys die neue Version bekommen.

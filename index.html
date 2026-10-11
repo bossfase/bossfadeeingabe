@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f1a17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Salonkasse">
+<title>Salonkasse</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --bg:#f6f2ee; --card:#ffffff; --ink:#1f1a17; --muted:#7a6f68; --line:#e6ded7;
+  --accent:#b5835a; --accent-ink:#ffffff; --sel:#1f1a17; --sel-ink:#ffffff;
+  --bar:#2f7d4f; --karte:#2b5c9e; --danger:#b3261e; --warn-bg:#fff3cd; --warn-ink:#6b4e00;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-text-size-adjust:100%;overscroll-behavior-y:none}
+body{min-height:100dvh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+input{font:inherit;font-size:16px}
+.wrap{max-width:520px;margin:0 auto;padding:12px 16px 96px}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0 10px}
+.navbtn{border:1px solid var(--line);background:var(--card);border-radius:12px;width:44px;height:44px;font-size:20px;flex:none}
+.navbtn:disabled{opacity:.3}
+.datebox{text-align:center;flex:1;min-width:0}
+#dateLabel{font-weight:700;font-size:17px}
+#clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+#todayBtn{display:none;margin:4px auto 0;border:0;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:4px 12px;font-size:13px}
+
+.banner{display:none;background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px}
+.banner.show{display:block}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px}
+.totals{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;margin-bottom:10px}
+.totals div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 4px}
+.totals small{display:block;color:var(--muted);font-size:12px}
+.totals b{font-size:16px;font-variant-numeric:tabular-nums}
+
+h2{font-size:14px;color:var(--muted);font-weight:600;margin:14px 2px 6px;text-transform:uppercase;letter-spacing:.6px}
+#list{list-style:none;margin:0;padding:0;max-height:34dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#list li{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--line)}
+#list li:last-child{border-bottom:0}
+.t{font-variant-numeric:tabular-nums;color:var(--muted);width:46px;flex:none}
+.a{font-weight:700;font-variant-numeric:tabular-nums;flex:1}
+.m{font-size:12px;font-weight:700;border-radius:999px;padding:3px 8px;color:#fff;flex:none}
+.m.bar{background:var(--bar)} .m.karte{background:var(--karte)}
+.ib{border:1px solid var(--line);background:var(--card);border-radius:10px;width:40px;height:40px;font-size:17px;flex:none}
+.ib.del{color:var(--danger)}
+.empty{color:var(--muted);text-align:center;padding:14px 0}
+
+#preview{font-size:26px;font-weight:800;text-align:center;padding:14px 8px;margin-top:14px;min-height:64px;font-variant-numeric:tabular-nums}
+#preview.placeholder{color:var(--muted);font-weight:500;font-size:17px}
+
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.amt{height:54px;border:1px solid var(--line);background:var(--card);border-radius:14px;font-size:19px;font-weight:700}
+.amt.custom{grid-column:span 4;font-size:17px}
+.amt.sel,.pay.sel{background:var(--sel);color:var(--sel-ink);border-color:var(--sel)}
+.payrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.pay{height:56px;border:2px solid var(--line);background:var(--card);border-radius:14px;font-size:17px;font-weight:700}
+.pay.sel.bar{background:var(--bar);border-color:var(--bar)}
+.pay.sel.karte{background:var(--karte);border-color:var(--karte)}
+#addBtn{width:100%;height:60px;margin-top:12px;border:0;border-radius:16px;background:var(--accent);color:var(--accent-ink);font-size:19px;font-weight:800}
+#addBtn:disabled{opacity:.35}
+.tools{display:flex;gap:8px;margin-top:16px}
+.tools button{flex:1;height:44px;border:1px solid var(--line);background:var(--card);border-radius:12px;font-size:14px}
+
+/* Dialoge */
+.overlay{position:fixed;inset:0;background:rgba(20,15,12,.5);display:none;align-items:flex-end;justify-content:center;z-index:50;padding:0 0 env(safe-area-inset-bottom)}
+.overlay.show{display:flex}
+.sheet{background:var(--card);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 16px 20px}
+@media(min-height:700px) and (min-width:560px){.overlay{align-items:center}.sheet{border-radius:20px}}
+.sheet h3{margin:0 0 12px;font-size:19px}
+.sheet label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.sheet input{width:100%;height:52px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font-size:22px;font-weight:700;background:#fff;color:var(--ink)}
+.sheet input[type=time]{font-size:20px}
+.err{color:var(--danger);font-size:14px;min-height:20px;margin-top:6px}
+.btnrow{display:flex;gap:8px;margin-top:14px}
+.btnrow button{flex:1;height:52px;border-radius:14px;font-size:17px;font-weight:700;border:1px solid var(--line);background:var(--card)}
+.btnrow .primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btnrow .danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.confirmtext{font-size:17px;line-height:1.4}
+
+#toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(calc(100% + 60px));
+  background:var(--ink);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:12px;
+  transition:transform .2s,visibility 0s .2s;visibility:hidden;z-index:60;max-width:calc(100% - 32px);font-size:15px}
+#toast.show{transform:translateX(-50%) translateY(0);visibility:visible;transition:transform .2s,visibility 0s}
+#toast button{border:0;background:var(--accent);color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <button class="navbtn" id="prevDay" aria-label="Vorheriger Tag">‹</button>
+    <div class="datebox">
+      <div id="dateLabel">–</div>
+      <div id="clock">--:--:--</div>
+      <button id="todayBtn">Zurück zu heute</button>
+    </div>
+    <button class="navbtn" id="nextDay" aria-label="Nächster Tag">›</button>
+  </header>
+
+  <div class="banner" id="storageBanner">⚠️ Speichern nicht möglich (privater Modus oder Speicher voll). Einträge gehen beim Schließen verloren!</div>
+  <div class="banner" id="pastBanner">Du siehst einen vergangenen Tag. Neue Einnahmen werden immer für heute eingetragen.</div>
+
+  <div class="totals">
+    <div><small>Gesamt</small><b id="sumAll">0,00 €</b></div>
+    <div><small>Bar</small><b id="sumBar">0,00 €</b></div>
+    <div><small>Karte</small><b id="sumKarte">0,00 €</b></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Verlauf <span id="count"></span></h2>
+    <ul id="list"></ul>
+  </div>
+
+  <section id="entry">
+    <div id="preview" class="card placeholder">Betrag und Zahlungsart wählen</div>
+    <div class="grid" id="amounts"></div>
+    <div class="payrow">
+      <button class="pay bar" data-method="bar">💶 Bar</button>
+      <button class="pay karte" data-method="karte">💳 Karte</button>
+    </div>
+    <button id="addBtn" disabled>Hinzufügen</button>
+  </section>
+
+  <div class="tools">
+    <button id="exportBtn">Tag als CSV exportieren</button>
+  </div>
+</div>
+
+<!-- Eigener Betrag -->
+<div class="overlay" id="customDlg" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <h3>Eigener Betrag</h3>
+    <label for="customInput">Betrag in €</label>
+    <input id="customInput" type="text" inputmode="decimal" autocomplete="off" placeholder="z. B. 37,50">
+    <div class="err" id="customErr"></div>
+    <div class="btnrow">
+      <button id="customCancel">Abbrechen</button>
+      <button class="primary" id="customOk">Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bearbeiten -->
+<div class="overlay" id="editDlg" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <h3>Eintrag ändern</h3>
+    <label for="editAmount">Betrag in €</label>
+    <input id="editAmount" type="text" inputmode="decimal" autocomplete="off">
+    <label>Zahlungsart</label>
+    <div class="payrow" style="margin-top:0">
+      <button class="pay bar" data-edit-method="bar">💶 Bar</button>
+      <button class="pay karte" data-edit-method="karte">💳 Karte</button>
+    </div>
+    <label for="editTime">Uhrzeit</label>
+    <input id="editTime" type="time">
+    <div class="err" id="editErr"></div>
+    <div class="btnrow">
+      <button id="editCancel">Abbrechen</button>
+      <button class="primary" id="editSave">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Löschen bestätigen -->
+<div class="overlay" id="delDlg" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <h3>Eintrag löschen?</h3>
+    <div class="confirmtext" id="delText"></div>
+    <div class="btnrow">
+      <button id="delCancel">Abbrechen</button>
+      <button class="danger" id="delOk">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"><span id="toastText"></span><button id="toastUndo">Rückgängig</button></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- Konstanten ---------- */
+var STORE_KEY = 'salonkasse.v1';
+var QUICK = [5,10,15,20,25,30,40,50];          // Schnellbeträge in Euro
+var MAX_CENTS = 1000000;                        // 10.000 €
+var METHODS = {bar:'Bar', karte:'Karte'};
+
+/* ---------- Hilfen ---------- */
+var $ = function(id){ return document.getElementById(id); };
+var euroFmt = new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'});
+function fmt(cents){ return euroFmt.format(cents/100); }
+function pad(n){ return (n<10?'0':'')+n; }
+function dayKey(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function hhmm(ts){ var d=new Date(ts); return pad(d.getHours())+':'+pad(d.getMinutes()); }
+function keyToDate(k){ var p=k.split('-'); return new Date(+p[0],+p[1]-1,+p[2],12,0,0,0); }
+function shiftKey(k,delta){ var d=keyToDate(k); d.setDate(d.getDate()+delta); return dayKey(d); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function buzz(){ try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){} }
+
+/* Betrag parsen: "12", "12,5", "12,50", "12.50", "1.234,50" -> Cent (Integer) oder null */
+function parseEuro(str){
+  if(typeof str!=='string') return null;
+  var s=str.replace(/\s|€/g,'');
+  if(s==='') return null;
+  if(/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s)) s=s.replace(/\./g,'');   // 1.234,50
+  s=s.replace(',', '.');
+  if(!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  var parts=s.split('.');
+  var cents=parseInt(parts[0],10)*100 + (parts[1]? parseInt((parts[1]+'0').slice(0,2),10):0);
+  if(!isFinite(cents)||cents<=0||cents>MAX_CENTS) return null;
+  return cents;
+}
+function centsToInput(c){ return (c/100).toFixed(2).replace('.',','); }
+
+/* ---------- Speicher ---------- */
+var storageOk = true;
+var entries = [];   // {id, ts, cents, method}
+
+function validEntry(e){
+  return e && typeof e.id==='string' && typeof e.ts==='number' && isFinite(e.ts) &&
+         Number.isInteger(e.cents) && e.cents>0 && e.cents<=MAX_CENTS && METHODS.hasOwnProperty(e.method);
+}
+function load(){
+  try{
+    var raw=localStorage.getItem(STORE_KEY);
+    if(!raw){ entries=[]; return; }
+    var data=JSON.parse(raw);
+    entries=(data && Array.isArray(data.entries)) ? data.entries.filter(validEntry) : [];
+  }catch(e){
+    entries=[];
+    // Defekte Daten nicht überschreiben, sondern sichern
+    try{ var bad=localStorage.getItem(STORE_KEY); if(bad) localStorage.setItem(STORE_KEY+'.defekt.'+Date.now(), bad); }catch(_){}
+  }
+}
+function save(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify({version:1, entries:entries}));
+    setStorageOk(true);
+    return true;
+  }catch(e){
+    setStorageOk(false);
+    return false;
+  }
+}
+function setStorageOk(ok){ storageOk=ok; $('storageBanner').classList.toggle('show',!ok); }
+function probeStorage(){
+  try{ var k=STORE_KEY+'.probe'; localStorage.setItem(k,'1'); localStorage.removeItem(k); setStorageOk(true); }
+  catch(e){ setStorageOk(false); }
+}
+
+/* ---------- Zustand ---------- */
+var todayKey = dayKey(new Date());
+var viewKey = todayKey;
+var selCents = null;     // gewählter Betrag
+var selMethod = null;    // gewählte Zahlungsart
+var customCents = null;  // zuletzt eingegebener eigener Betrag
+var editId = null, editMethod = null;
+var delId = null;
+var lastAdd = 0;
+
+/* ---------- Rendern ---------- */
+function render(){
+  var isToday = viewKey===todayKey;
+  var d=keyToDate(viewKey);
+  $('dateLabel').textContent = d.toLocaleDateString('de-DE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
+  $('todayBtn').style.display = isToday?'none':'block';
+  $('nextDay').disabled = isToday;
+  $('pastBanner').classList.toggle('show',!isToday);
+  $('entry').style.display = isToday?'':'none';
+
+  var day = entries.filter(function(e){ return dayKey(new Date(e.ts))===viewKey; })
+                   .sort(function(a,b){ return b.ts-a.ts; });
+  var all=0, bar=0, karte=0;
+  day.forEach(function(e){ all+=e.cents; if(e.method==='bar') bar+=e.cents; else karte+=e.cents; });
+  $('sumAll').textContent=fmt(all); $('sumBar').textContent=fmt(bar); $('sumKarte').textContent=fmt(karte);
+  $('count').textContent = day.length? '('+day.length+')' : '';
+
+  var ul=$('list'); ul.textContent='';
+  if(!day.length){
+    var li=document.createElement('li'); li.className='empty'; li.textContent='Noch keine Einträge'; ul.appendChild(li);
+  }
+  day.forEach(function(e){
+    var li=document.createElement('li');
+    var t=document.createElement('span'); t.className='t'; t.textContent=hhmm(e.ts);
+    var a=document.createElement('span'); a.className='a'; a.textContent=fmt(e.cents);
+    var m=document.createElement('span'); m.className='m '+e.method; m.textContent=METHODS[e.method];
+    var eb=document.createElement('button'); eb.className='ib'; eb.textContent='✏️'; eb.setAttribute('aria-label','Ändern'); eb.dataset.edit=e.id;
+    var db=document.createElement('button'); db.className='ib del'; db.textContent='🗑'; db.setAttribute('aria-label','Löschen'); db.dataset.del=e.id;
+    li.appendChild(t); li.appendChild(a); li.appendChild(m); li.appendChild(eb); li.appendChild(db);
+    ul.appendChild(li);
+  });
+  renderEntry();
+}
+
+function renderEntry(){
+  var btns=document.querySelectorAll('#amounts .amt');
+  for(var i=0;i<btns.length;i++){
+    var b=btns[i];
+    if(b.dataset.cents) b.classList.toggle('sel', +b.dataset.cents===selCents && customCents!==selCents);
+    else b.classList.toggle('sel', customCents!==null && selCents===customCents);
+  }
+  var cb=$('customBtn');
+  cb.textContent = (customCents!==null && selCents===customCents) ? 'Eigener: '+fmt(customCents)+' (ändern)' : 'Eigenes …';
+  var pays=document.querySelectorAll('#entry .pay');
+  for(var j=0;j<pays.length;j++) pays[j].classList.toggle('sel', pays[j].dataset.method===selMethod);
+
+  var p=$('preview');
+  if(selCents===null && !selMethod){ p.className='card placeholder'; p.textContent='Betrag und Zahlungsart wählen'; }
+  else if(selCents===null){ p.className='card placeholder'; p.textContent='Betrag wählen ('+METHODS[selMethod]+')'; }
+  else if(!selMethod){ p.className='card'; p.textContent=fmt(selCents)+' – Zahlungsart?'; }
+  else { p.className='card'; p.textContent=fmt(selCents)+(selMethod==='bar'?' bar':' mit Karte'); }
+  $('addBtn').disabled = !(selCents!==null && selMethod);
+}
+
+function buildAmounts(){
+  var g=$('amounts');
+  QUICK.forEach(function(v){
+    var b=document.createElement('button'); b.className='amt'; b.dataset.cents=String(v*100); b.textContent=v+' €';
+    g.appendChild(b);
+  });
+  var c=document.createElement('button'); c.className='amt custom'; c.id='customBtn'; c.textContent='Eigenes …';
+  g.appendChild(c);
+}
+
+/* ---------- Uhr & Tageswechsel ---------- */
+function tick(){
+  var now=new Date();
+  $('clock').textContent=pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+  var k=dayKey(now);
+  if(k!==todayKey){
+    var wasToday = viewKey===todayKey;
+    todayKey=k;
+    if(wasToday){ viewKey=k; selCents=null; selMethod=null; customCents=null; }
+    render();
+  }
+}
+
+/* ---------- Dialoge ---------- */
+var openDlg=null;
+function showDlg(id){ openDlg=id; $(id).classList.add('show'); }
+function hideDlg(id){ $(id).classList.remove('show'); if(openDlg===id) openDlg=null; }
+
+function openCustom(){
+  $('customErr').textContent='';
+  $('customInput').value = customCents!==null ? centsToInput(customCents) : '';
+  showDlg('customDlg');
+  setTimeout(function(){ try{ $('customInput').focus(); $('customInput').select(); }catch(e){} },50);
+}
+function confirmCustom(){
+  var c=parseEuro($('customInput').value);
+  if(c===null){ $('customErr').textContent='Bitte gültigen Betrag eingeben (0,01 – 10.000 €, max. 2 Nachkommastellen).'; return; }
+  customCents=c; selCents=c; hideDlg('customDlg'); renderEntry();
+}
+
+function openEdit(id){
+  var e=find(id); if(!e) return;
+  editId=id; editMethod=e.method;
+  $('editAmount').value=centsToInput(e.cents);
+  $('editTime').value=hhmm(e.ts);
+  $('editErr').textContent='';
+  renderEditMethod();
+  showDlg('editDlg');
+}
+function renderEditMethod(){
+  var b=document.querySelectorAll('[data-edit-method]');
+  for(var i=0;i<b.length;i++) b[i].classList.toggle('sel', b[i].dataset.editMethod===editMethod);
+}
+function saveEdit(){
+  var e=find(editId);
+  if(!e){ hideDlg('editDlg'); return; }
+  var c=parseEuro($('editAmount').value);
+  if(c===null){ $('editErr').textContent='Bitte gültigen Betrag eingeben (0,01 – 10.000 €).'; return; }
+  if(!METHODS.hasOwnProperty(editMethod)){ $('editErr').textContent='Bitte Zahlungsart wählen.'; return; }
+  var tv=$('editTime').value, m=/^(\d{1,2}):(\d{2})/.exec(tv||'');
+  if(!m || +m[1]>23 || +m[2]>59){ $('editErr').textContent='Bitte gültige Uhrzeit eingeben.'; return; }
+  var backup={cents:e.cents, method:e.method, ts:e.ts};
+  var d=new Date(e.ts); d.setHours(+m[1], +m[2], 0, 0);
+  e.cents=c; e.method=editMethod; e.ts=d.getTime();
+  if(!save()){ e.cents=backup.cents; e.method=backup.method; e.ts=backup.ts; $('editErr').textContent='Speichern fehlgeschlagen!'; return; }
+  hideDlg('editDlg'); editId=null; render(); toast('Eintrag geändert');
+}
+
+function askDelete(id){
+  var e=find(id); if(!e) return;
+  delId=id;
+  $('delText').textContent=hhmm(e.ts)+' Uhr · '+fmt(e.cents)+' · '+METHODS[e.method];
+  showDlg('delDlg');
+}
+function doDelete(){
+  var idx=indexOf(delId);
+  hideDlg('delDlg');
+  if(idx<0){ delId=null; return; }
+  var removed=entries.splice(idx,1)[0];
+  delId=null;
+  if(!save()){ entries.splice(idx,0,removed); render(); toast('Löschen fehlgeschlagen – Speicher nicht verfügbar'); return; }
+  render(); buzz();
+  toast('Eintrag gelöscht', function(){
+    if(indexOf(removed.id)<0){ entries.push(removed); save(); render(); toast('Wiederhergestellt'); }
+  });
+}
+
+function find(id){ for(var i=0;i<entries.length;i++) if(entries[i].id===id) return entries[i]; return null; }
+function indexOf(id){ for(var i=0;i<entries.length;i++) if(entries[i].id===id) return i; return -1; }
+
+/* ---------- Hinzufügen ---------- */
+function add(){
+  if(selCents===null || !selMethod || viewKey!==todayKey) return;
+  var now=Date.now();
+  if(now-lastAdd<800) return;           // Schutz gegen Doppeltippen
+  lastAdd=now;
+  var e={id:uid(), ts:now, cents:selCents, method:selMethod};
+  entries.push(e);
+  if(!save()){ /* bleibt im Speicher der Seite, Banner warnt */ }
+  var msg=fmt(e.cents)+' '+METHODS[e.method]+' eingetragen';
+  selCents=null; selMethod=null; customCents=null;
+  render(); buzz();
+  $('list').scrollTop=0;
+  toast(msg, function(){
+    var i=indexOf(e.id); if(i>=0){ entries.splice(i,1); save(); render(); toast('Rückgängig gemacht'); }
+  });
+}
+
+/* ---------- Toast ---------- */
+var toastTimer=null, toastUndoFn=null;
+function toast(text, undoFn){
+  $('toastText').textContent=text;
+  toastUndoFn=undoFn||null;
+  $('toastUndo').style.display=undoFn?'block':'none';
+  $('toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(hideToast, undoFn?6000:2500);
+}
+function hideToast(){ $('toast').classList.remove('show'); toastUndoFn=null; }
+
+/* ---------- Export ---------- */
+function exportCsv(){
+  var day=entries.filter(function(e){ return dayKey(new Date(e.ts))===viewKey; }).sort(function(a,b){ return a.ts-b.ts; });
+  if(!day.length){ toast('Keine Einträge an diesem Tag'); return; }
+  var lines=['Datum;Uhrzeit;Betrag;Zahlungsart'];
+  var bar=0,karte=0;
+  day.forEach(function(e){
+    lines.push(viewKey+';'+hhmm(e.ts)+';'+centsToInput(e.cents)+';'+METHODS[e.method]);
+    if(e.method==='bar') bar+=e.cents; else karte+=e.cents;
+  });
+  lines.push(';;;'); lines.push('Summe Bar;;'+centsToInput(bar)+';'); lines.push('Summe Karte;;'+centsToInput(karte)+';');
+  lines.push('Gesamt;;'+centsToInput(bar+karte)+';');
+  var csv='﻿'+lines.join('\r\n');
+  var name='Kasse_'+viewKey+'.csv';
+  try{
+    var file=new File([csv],name,{type:'text/csv'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:name}).catch(function(){});
+      return;
+    }
+  }catch(e){}
+  try{
+    var url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },1000);
+  }catch(e){ toast('Export nicht möglich'); }
+}
+
+/* ---------- Events ---------- */
+function bind(){
+  $('amounts').addEventListener('click',function(ev){
+    var b=ev.target.closest('.amt'); if(!b) return;
+    if(b.id==='customBtn'){ openCustom(); return; }
+    var c=+b.dataset.cents;
+    selCents = (selCents===c && customCents!==c) ? null : c;   // nochmal tippen = abwählen
+    if(selCents!==null) customCents=null;
+    renderEntry();
+  });
+  document.querySelector('#entry .payrow').addEventListener('click',function(ev){
+    var b=ev.target.closest('.pay'); if(!b) return;
+    selMethod = selMethod===b.dataset.method ? null : b.dataset.method;
+    renderEntry();
+  });
+  $('addBtn').addEventListener('click',add);
+
+  $('list').addEventListener('click',function(ev){
+    var b=ev.target.closest('button'); if(!b) return;
+    if(b.dataset.edit) openEdit(b.dataset.edit);
+    else if(b.dataset.del) askDelete(b.dataset.del);
+  });
+
+  $('customOk').addEventListener('click',confirmCustom);
+  $('customCancel').addEventListener('click',function(){ hideDlg('customDlg'); });
+  $('customInput').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); confirmCustom(); } });
+  $('customInput').addEventListener('input',function(){ $('customErr').textContent=''; });
+
+  document.querySelector('#editDlg .payrow').addEventListener('click',function(ev){
+    var b=ev.target.closest('[data-edit-method]'); if(!b) return; editMethod=b.dataset.editMethod; renderEditMethod();
+  });
+  $('editSave').addEventListener('click',saveEdit);
+  $('editCancel').addEventListener('click',function(){ hideDlg('editDlg'); editId=null; });
+  $('editAmount').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); saveEdit(); } });
+
+  $('delOk').addEventListener('click',doDelete);
+  $('delCancel').addEventListener('click',function(){ hideDlg('delDlg'); delId=null; });
+
+  // Tippen auf den dunklen Hintergrund schließt den Dialog
+  ['customDlg','editDlg','delDlg'].forEach(function(id){
+    $(id).addEventListener('click',function(ev){ if(ev.target===$(id)){ hideDlg(id); editId=null; delId=null; } });
+  });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape' && openDlg){ hideDlg(openDlg); editId=null; delId=null; } });
+
+  $('toastUndo').addEventListener('click',function(){ var f=toastUndoFn; hideToast(); if(f) f(); });
+
+  $('prevDay').addEventListener('click',function(){ viewKey=shiftKey(viewKey,-1); render(); });
+  $('nextDay').addEventListener('click',function(){ if(viewKey<todayKey){ viewKey=shiftKey(viewKey,1); if(viewKey>todayKey) viewKey=todayKey; render(); } });
+  $('todayBtn').addEventListener('click',function(){ viewKey=todayKey; render(); });
+  $('exportBtn').addEventListener('click',exportCsv);
+
+  // Änderungen aus anderem Tab übernehmen
+  window.addEventListener('storage',function(e){ if(e.key===STORE_KEY){ load(); render(); } });
+  // Beim Zurückkehren in die App Uhr/Tag sofort aktualisieren
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) tick(); });
+}
+
+/* ---------- Start ---------- */
+buildAmounts();
+probeStorage();
+load();
+bind();
+render();
+tick();
+setInterval(tick,1000);
+
+try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){}); }catch(e){}
+if('serviceWorker' in navigator && location.protocol!=='file:'){
+  window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+}
+
+// Nur für automatische Tests
+window.__salon={parseEuro:parseEuro, get entries(){return entries;}};
+})();
+</script>
+</body>
+</html>
