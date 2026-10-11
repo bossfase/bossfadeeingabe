@@ -16,7 +16,7 @@
 :root{
   --bg:#f6f2ee; --card:#ffffff; --ink:#1f1a17; --muted:#7a6f68; --line:#e6ded7;
   --accent:#b5835a; --accent-ink:#ffffff; --sel:#1f1a17; --sel-ink:#ffffff;
-  --bar:#2f7d4f; --karte:#2b5c9e; --danger:#b3261e; --warn-bg:#fff3cd; --warn-ink:#6b4e00;
+  --bar:#2f7d4f; --stamp:#8a3fa0; --karte:#2b5c9e; --danger:#b3261e; --warn-bg:#fff3cd; --warn-ink:#6b4e00;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);
@@ -67,6 +67,11 @@ h2{font-size:14px;color:var(--muted);font-weight:600;margin:14px 2px 6px;text-tr
 .pay{height:56px;border:2px solid var(--line);background:var(--card);border-radius:14px;font-size:17px;font-weight:700}
 .pay.sel.bar{background:var(--bar);border-color:var(--bar)}
 .pay.sel.karte{background:var(--karte);border-color:var(--karte)}
+.stamp{width:100%;height:54px;margin-top:10px;border:2px dashed var(--stamp);background:var(--card);color:var(--stamp);border-radius:14px;font-size:17px;font-weight:800}
+.stamp.sel{background:var(--stamp);color:#fff;border-style:solid}
+.m.frei{background:var(--stamp)}
+.sb{font-size:12px;color:var(--stamp);font-weight:700;display:block}
+#stampInfo{display:none;text-align:center;font-size:13px;color:var(--stamp);font-weight:700;margin:-4px 0 10px}
 #addBtn{width:100%;height:60px;margin-top:12px;border:0;border-radius:16px;background:var(--accent);color:var(--accent-ink);font-size:19px;font-weight:800}
 #addBtn:disabled{opacity:.35}
 .tools{display:flex;gap:8px;margin-top:16px}
@@ -115,6 +120,7 @@ h2{font-size:14px;color:var(--muted);font-weight:600;margin:14px 2px 6px;text-tr
     <div><small>Bar</small><b id="sumBar">0,00 €</b></div>
     <div><small>Karte</small><b id="sumKarte">0,00 €</b></div>
   </div>
+  <div id="stampInfo"></div>
 
   <div class="card">
     <h2 style="margin-top:0">Verlauf <span id="count"></span></h2>
@@ -124,6 +130,7 @@ h2{font-size:14px;color:var(--muted);font-weight:600;margin:14px 2px 6px;text-tr
   <section id="entry">
     <div id="preview" class="card placeholder">Betrag und Zahlungsart wählen</div>
     <div class="grid" id="amounts"></div>
+    <button class="stamp" id="stampBtn">🎟 Stempelkarte eingelöst (−10 €)</button>
     <div class="payrow">
       <button class="pay bar" data-method="bar">💶 Bar</button>
       <button class="pay karte" data-method="karte">💳 Karte</button>
@@ -154,13 +161,14 @@ h2{font-size:14px;color:var(--muted);font-weight:600;margin:14px 2px 6px;text-tr
 <div class="overlay" id="editDlg" role="dialog" aria-modal="true">
   <div class="sheet">
     <h3>Eintrag ändern</h3>
-    <label for="editAmount">Betrag in €</label>
+    <label for="editAmount">Preis in € (vor Stempelkarte)</label>
     <input id="editAmount" type="text" inputmode="decimal" autocomplete="off">
     <label>Zahlungsart</label>
     <div class="payrow" style="margin-top:0">
       <button class="pay bar" data-edit-method="bar">💶 Bar</button>
       <button class="pay karte" data-edit-method="karte">💳 Karte</button>
     </div>
+    <button class="stamp" id="editStamp" style="margin-top:12px">🎟 Stempelkarte (−10 €)</button>
     <label for="editTime">Uhrzeit</label>
     <input id="editTime" type="time">
     <div class="err" id="editErr"></div>
@@ -194,6 +202,9 @@ var STORE_KEY = 'salonkasse.v1';
 var QUICK = [5,10,15,20,25,30,40,50];          // Schnellbeträge in Euro
 var MAX_CENTS = 1000000;                        // 10.000 €
 var METHODS = {bar:'Bar', karte:'Karte'};
+var STAMP = 1000;                               // Stempelkarte = 10 € Rabatt
+function methodLabel(m){ return m==='frei' ? 'Stempelkarte' : METHODS[m]; }
+function netOf(gross, stamp){ return stamp ? gross-STAMP : gross; }
 
 /* ---------- Hilfen ---------- */
 var $ = function(id){ return document.getElementById(id); };
@@ -227,8 +238,12 @@ var storageOk = true;
 var entries = [];   // {id, ts, cents, method}
 
 function validEntry(e){
-  return e && typeof e.id==='string' && typeof e.ts==='number' && isFinite(e.ts) &&
-         Number.isInteger(e.cents) && e.cents>0 && e.cents<=MAX_CENTS && METHODS.hasOwnProperty(e.method);
+  if(!(e && typeof e.id==='string' && typeof e.ts==='number' && isFinite(e.ts) && Number.isInteger(e.cents))) return false;
+  if(e.stamp===true){
+    if(!(Number.isInteger(e.gross) && e.gross>=STAMP && e.gross<=MAX_CENTS && e.cents===e.gross-STAMP)) return false;
+    return e.cents===0 ? e.method==='frei' : METHODS.hasOwnProperty(e.method);
+  }
+  return e.cents>0 && e.cents<=MAX_CENTS && METHODS.hasOwnProperty(e.method);
 }
 function load(){
   try{
@@ -264,7 +279,8 @@ var viewKey = todayKey;
 var selCents = null;     // gewählter Betrag
 var selMethod = null;    // gewählte Zahlungsart
 var customCents = null;  // zuletzt eingegebener eigener Betrag
-var editId = null, editMethod = null;
+var editId = null, editMethod = null, editStamp = false;
+var selStamp = false;   // Stempelkarte gewählt
 var delId = null;
 var lastAdd = 0;
 
@@ -280,8 +296,11 @@ function render(){
 
   var day = entries.filter(function(e){ return dayKey(new Date(e.ts))===viewKey; })
                    .sort(function(a,b){ return b.ts-a.ts; });
-  var all=0, bar=0, karte=0;
-  day.forEach(function(e){ all+=e.cents; if(e.method==='bar') bar+=e.cents; else karte+=e.cents; });
+  var all=0, bar=0, karte=0, stamps=0;
+  day.forEach(function(e){ all+=e.cents; if(e.method==='bar') bar+=e.cents; else if(e.method==='karte') karte+=e.cents; if(e.stamp) stamps++; });
+  var si=$('stampInfo');
+  si.style.display = stamps? 'block':'none';
+  si.textContent = stamps? '🎟 '+stamps+' Stempelkarte'+(stamps>1?'n':'')+' eingelöst (−'+fmt(stamps*STAMP)+')' : '';
   $('sumAll').textContent=fmt(all); $('sumBar').textContent=fmt(bar); $('sumKarte').textContent=fmt(karte);
   $('count').textContent = day.length? '('+day.length+')' : '';
 
@@ -293,7 +312,8 @@ function render(){
     var li=document.createElement('li');
     var t=document.createElement('span'); t.className='t'; t.textContent=hhmm(e.ts);
     var a=document.createElement('span'); a.className='a'; a.textContent=fmt(e.cents);
-    var m=document.createElement('span'); m.className='m '+e.method; m.textContent=METHODS[e.method];
+    if(e.stamp){ var sb=document.createElement('span'); sb.className='sb'; sb.textContent='🎟 '+fmt(e.gross)+' − 10 €'; a.appendChild(sb); }
+    var m=document.createElement('span'); m.className='m '+e.method; m.textContent=e.method==='frei'?'🎟':METHODS[e.method];
     var eb=document.createElement('button'); eb.className='ib'; eb.textContent='✏️'; eb.setAttribute('aria-label','Ändern'); eb.dataset.edit=e.id;
     var db=document.createElement('button'); db.className='ib del'; db.textContent='🗑'; db.setAttribute('aria-label','Löschen'); db.dataset.del=e.id;
     li.appendChild(t); li.appendChild(a); li.appendChild(m); li.appendChild(eb); li.appendChild(db);
@@ -314,12 +334,22 @@ function renderEntry(){
   var pays=document.querySelectorAll('#entry .pay');
   for(var j=0;j<pays.length;j++) pays[j].classList.toggle('sel', pays[j].dataset.method===selMethod);
 
-  var p=$('preview');
-  if(selCents===null && !selMethod){ p.className='card placeholder'; p.textContent='Betrag und Zahlungsart wählen'; }
-  else if(selCents===null){ p.className='card placeholder'; p.textContent='Betrag wählen ('+METHODS[selMethod]+')'; }
-  else if(!selMethod){ p.className='card'; p.textContent=fmt(selCents)+' – Zahlungsart?'; }
-  else { p.className='card'; p.textContent=fmt(selCents)+(selMethod==='bar'?' bar':' mit Karte'); }
-  $('addBtn').disabled = !(selCents!==null && selMethod);
+  $('stampBtn').classList.toggle('sel', selStamp);
+  var p=$('preview'), ok=false, how=selMethod?(selMethod==='bar'?' bar':' mit Karte'):'';
+  var net = selCents===null ? null : netOf(selCents, selStamp);
+  if(selCents===null){
+    p.className='card placeholder';
+    p.textContent = selStamp ? 'Preis wählen (−10 € Stempelkarte)' : (selMethod? 'Betrag wählen ('+METHODS[selMethod]+')' : 'Betrag und Zahlungsart wählen');
+  } else if(net<0){
+    p.className='card'; p.textContent='Preis unter 10 € – Stempelkarte geht nicht';
+  } else if(net===0){
+    p.className='card'; p.textContent=fmt(selCents)+' komplett mit Stempelkarte'; ok=true;
+  } else {
+    p.className='card';
+    p.textContent=(selStamp? fmt(selCents)+' − 10 € = ':'')+fmt(net)+(selMethod? how : ' – Zahlungsart?');
+    ok=!!selMethod;
+  }
+  $('addBtn').disabled = !ok;
 }
 
 function buildAmounts(){
@@ -340,7 +370,7 @@ function tick(){
   if(k!==todayKey){
     var wasToday = viewKey===todayKey;
     todayKey=k;
-    if(wasToday){ viewKey=k; selCents=null; selMethod=null; customCents=null; }
+    if(wasToday){ viewKey=k; selCents=null; selMethod=null; customCents=null; selStamp=false; }
     render();
   }
 }
@@ -364,8 +394,8 @@ function confirmCustom(){
 
 function openEdit(id){
   var e=find(id); if(!e) return;
-  editId=id; editMethod=e.method;
-  $('editAmount').value=centsToInput(e.cents);
+  editId=id; editMethod=e.method==='frei'?null:e.method; editStamp=!!e.stamp;
+  $('editAmount').value=centsToInput(e.stamp? e.gross : e.cents);
   $('editTime').value=hhmm(e.ts);
   $('editErr').textContent='';
   renderEditMethod();
@@ -374,26 +404,30 @@ function openEdit(id){
 function renderEditMethod(){
   var b=document.querySelectorAll('[data-edit-method]');
   for(var i=0;i<b.length;i++) b[i].classList.toggle('sel', b[i].dataset.editMethod===editMethod);
+  $('editStamp').classList.toggle('sel', editStamp);
 }
 function saveEdit(){
   var e=find(editId);
   if(!e){ hideDlg('editDlg'); return; }
   var c=parseEuro($('editAmount').value);
   if(c===null){ $('editErr').textContent='Bitte gültigen Betrag eingeben (0,01 – 10.000 €).'; return; }
-  if(!METHODS.hasOwnProperty(editMethod)){ $('editErr').textContent='Bitte Zahlungsart wählen.'; return; }
+  var net=netOf(c, editStamp);
+  if(net<0){ $('editErr').textContent='Mit Stempelkarte muss der Preis mindestens 10 € sein.'; return; }
+  if(net>0 && !METHODS.hasOwnProperty(editMethod)){ $('editErr').textContent='Bitte Zahlungsart wählen (Bar oder Karte).'; return; }
   var tv=$('editTime').value, m=/^(\d{1,2}):(\d{2})/.exec(tv||'');
   if(!m || +m[1]>23 || +m[2]>59){ $('editErr').textContent='Bitte gültige Uhrzeit eingeben.'; return; }
-  var backup={cents:e.cents, method:e.method, ts:e.ts};
+  var backup=JSON.parse(JSON.stringify(e));
   var d=new Date(e.ts); d.setHours(+m[1], +m[2], 0, 0);
-  e.cents=c; e.method=editMethod; e.ts=d.getTime();
-  if(!save()){ e.cents=backup.cents; e.method=backup.method; e.ts=backup.ts; $('editErr').textContent='Speichern fehlgeschlagen!'; return; }
+  e.cents=net; e.method= net===0 ? 'frei' : editMethod; e.ts=d.getTime();
+  if(editStamp){ e.stamp=true; e.gross=c; } else { delete e.stamp; delete e.gross; }
+  if(!save()){ for(var k in e) delete e[k]; Object.assign(e, backup); $('editErr').textContent='Speichern fehlgeschlagen!'; return; }
   hideDlg('editDlg'); editId=null; render(); toast('Eintrag geändert');
 }
 
 function askDelete(id){
   var e=find(id); if(!e) return;
   delId=id;
-  $('delText').textContent=hhmm(e.ts)+' Uhr · '+fmt(e.cents)+' · '+METHODS[e.method];
+  $('delText').textContent=hhmm(e.ts)+' Uhr · '+fmt(e.cents)+' · '+methodLabel(e.method)+(e.stamp&&e.method!=='frei'?' · Stempelkarte':'');
   showDlg('delDlg');
 }
 function doDelete(){
@@ -414,15 +448,18 @@ function indexOf(id){ for(var i=0;i<entries.length;i++) if(entries[i].id===id) r
 
 /* ---------- Hinzufügen ---------- */
 function add(){
-  if(selCents===null || !selMethod || viewKey!==todayKey) return;
+  if(selCents===null || viewKey!==todayKey) return;
+  var net=netOf(selCents, selStamp);
+  if(net<0 || (net>0 && !selMethod)) return;
   var now=Date.now();
   if(now-lastAdd<800) return;           // Schutz gegen Doppeltippen
   lastAdd=now;
-  var e={id:uid(), ts:now, cents:selCents, method:selMethod};
+  var e={id:uid(), ts:now, cents:net, method: net===0 ? 'frei' : selMethod};
+  if(selStamp){ e.stamp=true; e.gross=selCents; }
   entries.push(e);
   if(!save()){ /* bleibt im Speicher der Seite, Banner warnt */ }
-  var msg=fmt(e.cents)+' '+METHODS[e.method]+' eingetragen';
-  selCents=null; selMethod=null; customCents=null;
+  var msg=fmt(e.cents)+' '+methodLabel(e.method)+(e.stamp&&e.method!=='frei'?' + Stempelkarte':'')+' eingetragen';
+  selCents=null; selMethod=null; customCents=null; selStamp=false;
   render(); buzz();
   $('list').scrollTop=0;
   toast(msg, function(){
@@ -446,14 +483,16 @@ function hideToast(){ $('toast').classList.remove('show'); toastUndoFn=null; }
 function exportCsv(){
   var day=entries.filter(function(e){ return dayKey(new Date(e.ts))===viewKey; }).sort(function(a,b){ return a.ts-b.ts; });
   if(!day.length){ toast('Keine Einträge an diesem Tag'); return; }
-  var lines=['Datum;Uhrzeit;Betrag;Zahlungsart'];
-  var bar=0,karte=0;
+  var lines=['Datum;Uhrzeit;Betrag;Zahlungsart;Stempelkarte;Preis vor Stempelkarte'];
+  var bar=0,karte=0,stamps=0;
   day.forEach(function(e){
-    lines.push(viewKey+';'+hhmm(e.ts)+';'+centsToInput(e.cents)+';'+METHODS[e.method]);
-    if(e.method==='bar') bar+=e.cents; else karte+=e.cents;
+    lines.push(viewKey+';'+hhmm(e.ts)+';'+centsToInput(e.cents)+';'+methodLabel(e.method)+';'+(e.stamp?'ja':'nein')+';'+centsToInput(e.stamp?e.gross:e.cents));
+    if(e.method==='bar') bar+=e.cents; else if(e.method==='karte') karte+=e.cents;
+    if(e.stamp) stamps++;
   });
-  lines.push(';;;'); lines.push('Summe Bar;;'+centsToInput(bar)+';'); lines.push('Summe Karte;;'+centsToInput(karte)+';');
-  lines.push('Gesamt;;'+centsToInput(bar+karte)+';');
+  lines.push(';;;;;'); lines.push('Summe Bar;;'+centsToInput(bar)+';;;'); lines.push('Summe Karte;;'+centsToInput(karte)+';;;');
+  lines.push('Gesamt;;'+centsToInput(bar+karte)+';;;');
+  lines.push('Stempelkarten eingelöst;;'+stamps+';;;');
   var csv='﻿'+lines.join('\r\n');
   var name='Kasse_'+viewKey+'.csv';
   try{
@@ -486,6 +525,8 @@ function bind(){
     renderEntry();
   });
   $('addBtn').addEventListener('click',add);
+  $('stampBtn').addEventListener('click',function(){ selStamp=!selStamp; renderEntry(); });
+  $('editStamp').addEventListener('click',function(){ editStamp=!editStamp; renderEditMethod(); });
 
   $('list').addEventListener('click',function(ev){
     var b=ev.target.closest('button'); if(!b) return;
