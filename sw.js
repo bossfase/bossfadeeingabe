@@ -1,5 +1,5 @@
 // Offline-Unterstützung. Bei Änderungen an den Dateien VERSION erhöhen.
-const VERSION = 'salonkasse-v1';
+const VERSION = 'salonkasse-v2';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -19,3 +19,4 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match(e.request, {ignoreSearch: true}).then(r => r || caches.match('./index.html')))
   );
 });
+
